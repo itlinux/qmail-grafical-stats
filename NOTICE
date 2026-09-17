@@ -1,0 +1,10 @@
+qmail-grafical-stats
+Copyright 2026 Remo Mattei
+
+This product includes software developed by Remo Mattei.
+
+This software reads the log formats produced by qmail (D. J. Bernstein),
+tcpserver and multilog (D. J. Bernstein), and simscan. No code from those
+projects, nor from qmailmrtg7 (Inter7, GPL), is included or derived here --
+only the shapes of the lines they write, which are not themselves subject to
+copyright.

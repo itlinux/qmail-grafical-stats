@@ -1,0 +1,1057 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>qmail mail statistics</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --surface-2: #f3f3f0;
+    --line: #dcdcd6;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #77766f;
+    --series-in: #2a78d6;
+    --series-out: #eb6834;
+    /* Status colours are fixed in both themes and never themed or reused as
+       series colours. They always ship beside a written label. */
+    --good: #0ca30c;
+    --warning: #fab219;
+    --critical: #d03b3b;
+    --serious: #ec835a;
+    /* Sequential blue ramp, lightest = near zero. */
+    --heat-0: #f3f3f0;
+    --heat-1: #cde2fb;
+    --heat-2: #9ec5f4;
+    --heat-3: #6da7ec;
+    --heat-4: #3987e5;
+    --heat-5: #256abf;
+    --heat-6: #104281;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --surface-2: #242423;
+      --line: #3a3a38;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8f8e85;
+      --series-in: #3987e5;
+      --series-out: #d95926;
+      --heat-0: #242423;
+      --heat-1: #104281;
+      --heat-2: #184f95;
+      --heat-3: #256abf;
+      --heat-4: #2a78d6;
+      --heat-5: #5598e7;
+      --heat-6: #9ec5f4;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --surface-2: #242423;
+    --line: #3a3a38;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8f8e85;
+    --series-in: #3987e5;
+    --series-out: #d95926;
+    --heat-0: #242423;
+    --heat-1: #104281;
+    --heat-2: #184f95;
+    --heat-3: #256abf;
+    --heat-4: #2a78d6;
+    --heat-5: #5598e7;
+    --heat-6: #9ec5f4;
+  }
+
+  body {
+    margin: 0;
+    padding-block: 28px;
+    padding-inline: 20px;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  h2 { font-size: 15px; margin: 30px 0 8px; font-weight: 600; }
+  .sub { color: var(--text-secondary); margin: 0 0 20px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 20px; }
+  label { display: block; font-size: 12px; color: var(--text-secondary); }
+  input, button {
+    font: inherit; padding: 5px 9px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--surface-1);
+    color: var(--text-primary);
+  }
+  button { cursor: pointer; background: var(--surface-2); }
+
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+          color: var(--text-secondary); padding-bottom: 6px; }
+  .live input { margin: 0; }
+  #updated { color: var(--text-muted); }
+
+  .tiles { display: flex; flex-wrap: wrap; gap: 10px; }
+  .tile {
+    flex: 1 1 130px; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; background: var(--surface-1); color: inherit;
+    font: inherit; text-align: left; cursor: pointer;
+    transition: border-color .12s, background .12s;
+  }
+  .tile:hover, .tile:focus-visible { border-color: var(--series-in); background: var(--surface-2); }
+  .tile:focus-visible { outline: 2px solid var(--series-in); outline-offset: 2px; }
+  .tile span { display: block; font-size: 12px; color: var(--text-secondary); }
+  .tile b { display: block; font-size: 23px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tile em { display: block; font-size: 11px; font-style: normal; color: var(--text-muted); margin-top: 2px; }
+
+  #retrytiles .tile { cursor: default; }
+  #retrytiles .tile:hover { border-color: var(--line); background: var(--surface-1); }
+
+  h2.flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { background: var(--surface-2); } to { background: transparent; } }
+  @media (prefers-reduced-motion: reduce) { h2.flash { animation: none; } }
+
+  .chip {
+    display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--surface-2);
+    color: var(--text-secondary); cursor: pointer; margin-left: 8px;
+  }
+
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+  .chart-wrap { overflow-x: auto; }
+  svg { display: block; }
+  svg text { fill: var(--text-muted); font-size: 11px; }
+  .grid line { stroke: var(--line); stroke-width: 1; }
+  .bar { cursor: pointer; }
+  .bar:hover { stroke: var(--surface-1); stroke-width: 2px; }
+
+  #tip {
+    position: fixed; pointer-events: none; opacity: 0;
+    background: var(--surface-2); color: var(--text-primary);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 9px; font-size: 12px; white-space: nowrap;
+    box-shadow: 0 2px 10px rgba(0,0,0,.18); transition: opacity .1s;
+  }
+
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--text-secondary); font-weight: 600; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .empty { color: var(--text-muted); font-style: italic; }
+  .alert {
+    border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 10px; background: var(--surface-2);
+    font-size: 13px;
+  }
+  .alert b { display: block; margin-bottom: 2px; }
+  .alert.critical { border-left-color: var(--critical); }
+  .alert.serious  { border-left-color: var(--serious, #ec835a); }
+  .alert.warning  { border-left-color: var(--warning); }
+
+  #demobanner {
+    border: 1px solid var(--warning); border-left-width: 4px; border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 18px; background: var(--surface-2);
+    color: var(--text-primary); font-size: 13px;
+  }
+  .small { font-size: 12px; margin: -4px 0 8px; }
+  .cell { cursor: pointer; }
+  .cell:hover { stroke: var(--text-primary); stroke-width: 1.5px; }
+    td a {
+      color: var(--series-in);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    td a:hover { text-decoration-thickness: 2px; }
+    thead th {
+      cursor: pointer;
+      user-select: none;
+}
+    thead th:hover { color: var(--text-primary); }
+    thead th::after {
+      content: "";
+      font-size: 0.75em;
+      opacity: 0.45;
+      padding-left: 0.35em;
+    }
+    thead th[data-sorted="asc"]::after { content: "\25B2"; opacity: 1; }
+    thead th[data-sorted="desc"]::after { content: "\25BC"; opacity: 1; }
+</style>
+
+<main>
+  <div id="demobanner" hidden>
+    <strong>Demo data.</strong> These rows came from <code>tools/seed_demo.py</code>
+    and are randomly generated. They are not a reading of any mail server.
+  </div>
+  <div id="alerts"></div>
+  <h1>qmail mail statistics</h1>
+  <p class="sub">Delivery rate is for mail <em>leaving</em> this server: local delivery almost never fails and would flatter a blended figure. Outcome figures count delivery <em>attempts</em>: a message retried twice appears three times. Times shown in <span id="tzname">UTC</span>.</p>
+
+  <div class="controls">
+    <div><label for="since">From</label><input type="date" id="since"></div>
+    <div><label for="until">To</label><input type="date" id="until"></div>
+    <button id="reload">Show</button>
+    <label class="live"><input type="checkbox" id="autorefresh" checked> Live
+      <span id="updated"></span></label>
+    <label class="live"><input type="checkbox" id="redact"> Hide addresses</label>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <h2 id="sec-volume">Messages per day</h2>
+  <div class="legend">
+    <span><i class="swatch" style="background:var(--series-in)"></i>Received</span>
+    <span><i class="swatch" style="background:var(--series-out)"></i>Sent</span>
+  </div>
+  <div class="chart-wrap"><svg id="chart" role="img" aria-label="Messages received and sent per day"></svg></div>
+
+  <h2 id="sec-ended">How deliveries ended</h2>
+  <div class="legend">
+    <span><i class="swatch" style="background:var(--good)"></i>Delivered</span>
+    <span><i class="swatch" style="background:var(--warning)"></i>Deferred</span>
+    <span><i class="swatch" style="background:var(--critical)"></i>Failed</span>
+  </div>
+  <div class="chart-wrap"><svg id="outcomes" role="img" aria-label="Delivery attempts per day by outcome"></svg></div>
+
+  <h2>When mail moves</h2>
+  <p class="sub small">Messages per hour of the week. Darker means busier.</p>
+  <div class="chart-wrap"><svg id="heatmap" role="img" aria-label="Messages by weekday and hour"></svg></div>
+
+  <h2 id="sec-accounts">Busiest accounts</h2>
+  <div class="table-wrap"><table id="senders"><thead><tr><th>Account</th><th class="num">Messages</th><th class="num">Bytes</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Where outbound mail goes</h2>
+  <div class="chart-wrap"><svg id="domains" role="img" aria-label="Delivery attempts by recipient domain"></svg></div>
+  <div class="table-wrap"><table id="recipients"><thead><tr><th>Recipient domain</th><th class="num">Attempts</th><th class="num">Delivered</th><th class="num">Deferred</th><th class="num">Failed</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Which domain sent where</h2>
+  <div class="table-wrap"><table id="flow"><thead><tr><th>From domain</th><th>To domain</th><th class="num">Attempts</th><th class="num">Delivered</th><th class="num">Deferred</th><th class="num">Failed</th><th class="num">Rate</th></tr></thead><tbody></tbody></table></div>
+
+  <h2 id="sec-retries">Did it arrive in the end?</h2>
+  <p class="sub small">Counted per recipient, not per attempt. qmail retries a deferral on a widening schedule until it gives up (7 days by default) and bounces; a failure is permanent and never retried.</p>
+  <div class="tiles" id="retrytiles"></div>
+  <div class="table-wrap"><table id="stuck"><thead><tr><th>Still being retried</th><th class="num">Attempts</th><th class="num">Hours waiting</th><th>Last reason</th><th>Last try</th></tr></thead><tbody></tbody></table></div>
+
+  <h2 id="sec-why">Why deliveries did not succeed</h2>
+  <p class="sub small">Grouped by cause, with who it happened to. Not by message. Deferrals included &mdash; greylisting resolves itself, but one that keeps recurring is worth chasing. A <code>5.7.1</code> status is usually SPF, DKIM or DMARC.</p>
+  <div class="table-wrap"><span class="chip" id="failfilter" hidden></span>
+  <table id="failures"><thead><tr><th>Outcome</th><th class="num">Code</th><th>Status</th><th>Reason</th><th>Sent by</th><th>Recipients</th><th class="num">Attempts</th><th>Last seen</th></tr></thead><tbody></tbody></table></div>
+
+  <h2 id="sec-blocked">Addresses blocked for guessing passwords</h2>
+  <p class="sub small">What fail2ban shut out, newest activity first. Three failures in an hour earns a day's block. Legitimate users do not appear here &mdash; they do not fail passwords from an address they later log in from.</p>
+  <div class="table-wrap"><table id="blocked"><thead><tr><th>Address</th><th class="num">Times blocked</th><th>Caught by</th><th>First</th><th>Last</th></tr></thead><tbody></tbody></table></div>
+
+  <h2 id="sec-detail">Every message that did not get through</h2>
+  <p class="sub small">One row per attempt, newest first. The grouped table above says a cause exists; this says which message hit it.</p>
+  <div class="table-wrap"><table id="faildetail"><thead><tr><th>When</th><th>Outcome</th><th>From</th><th>To</th><th class="num">Code</th><th>Status</th><th>Refused by</th><th>Side</th><th>What it said</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Spam marked per mailbox</h2>
+  <p class="sub small">Scanned mail that was delivered. Mail rejected during the SMTP conversation never reaches the queue and cannot be counted here.</p>
+  <div class="chart-wrap"><svg id="spam" role="img" aria-label="Spam and clean mail per mailbox"></svg></div>
+  <div class="table-wrap"><table id="spamtable"><thead><tr><th>Mailbox</th><th class="num">Spam</th><th class="num">Clean</th><th class="num">Spam share</th><th class="num">Worst score</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Connections per service</h2>
+  <p class="sub small">Sessions that connected but sent no mail are usually scanning or guessing passwords.</p>
+  <div class="table-wrap"><table id="connections"><thead><tr><th>Service</th><th class="num">Connections</th><th class="num">Messages</th><th class="num">Sent nothing</th><th class="num">Peak concurrent</th><th class="num">Limit</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Queue concurrency</h2>
+  <p class="sub small">Highest number of simultaneous deliveries per minute, against the configured limits.</p>
+  <div class="legend">
+    <span><i class="swatch" style="background:var(--series-in)"></i>Local</span>
+    <span><i class="swatch" style="background:var(--series-out)"></i>Remote</span>
+  </div>
+  <div class="chart-wrap"><svg id="concurrency" role="img" aria-label="Queue concurrency over time"></svg></div>
+
+  <h2>Mailbox access</h2>
+  <p class="sub small">Who collected their mail, over IMAP and POP3.</p>
+  <div class="table-wrap"><table id="access"><thead><tr><th>Mailbox</th><th>Service</th><th class="num">Logins</th><th class="num">Addresses</th><th>Last seen</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Password guessing</h2>
+  <p class="sub small">Clients that tried a password and failed. One address against many accounts is a dictionary attack; many failures against one account is usually a client with stale credentials.</p>
+  <div class="table-wrap"><table id="authfail"><thead><tr><th>Client address</th><th class="num">Failures</th><th class="num">Accounts tried</th><th>Last seen</th><th>Blocked</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Mailboxes</h2>
+  <div class="table-wrap"><table id="mailboxes"><thead><tr><th>Address</th><th class="num">Sent</th><th class="num">Received</th></tr></thead><tbody></tbody></table></div>
+</main>
+
+<div id="tip"></div>
+
+<script>
+const SVG = "http://www.w3.org/2000/svg";
+// Matched to how often the parser runs. Polling faster shows nothing new: the
+// figures cannot move until the next ingest has read the logs.
+const REFRESH_SECONDS = 30;
+const tip = document.getElementById("tip");
+const num = (n) => Number(n || 0).toLocaleString();
+
+// Stand-ins for real addresses, for screenshots and demonstrations. The same
+// address always becomes the same stand-in and a domain always becomes the
+// same domain, so every table still agrees with every other one -- the figures
+// and the relationships are real, only the identities are not.
+const pseudonyms = new Map();
+const pseudonymDomains = new Map();
+
+function pseudonym(value) {
+  if (!value || typeof value !== "string") return value;
+  if (!value.includes("@")) return pseudonymDomain(value);
+  if (pseudonyms.has(value)) return pseudonyms.get(value);
+  const [, domain] = value.split("@");
+  const made = "user" + (pseudonyms.size + 1) + "@" + pseudonymDomain(domain);
+  pseudonyms.set(value, made);
+  return made;
+}
+
+function pseudonymDomain(domain) {
+  if (!domain) return domain;
+  if (pseudonymDomains.has(domain)) return pseudonymDomains.get(domain);
+  const made = "domain" + (pseudonymDomains.size + 1) + ".example";
+  pseudonymDomains.set(domain, made);
+  return made;
+}
+
+const hiding = () => document.getElementById("redact").checked;
+const shown = (value) => hiding() ? pseudonym(value) : value;
+
+// Bytes are read as "is that a lot?", never digit by digit.
+function bytes(n) {
+  let value = Number(n || 0);
+  const units = ["B", "kB", "MB", "GB", "TB"];
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+  return (unit === 0 ? value : value.toFixed(value < 10 ? 1 : 0)) + " " + units[unit];
+}
+
+// Daily bars stop being readable past a couple of months: 150 of them in a
+// chart scaled to fit is a smear. Past eight weeks, group by week.
+function bucketForRange() {
+  const since = new Date(document.getElementById("since").value);
+  const until = new Date(document.getElementById("until").value);
+  const days = (until - since) / 86400000;
+  return days > 56 ? "week" : "day";
+}
+
+const range = () =>
+  "since=" + document.getElementById("since").value +
+  "&until=" + document.getElementById("until").value +
+  "&bucket=" + bucketForRange();
+
+async function get(path) {
+  const response = await fetch(path + "?" + range());
+  if (!response.ok) throw new Error(path + " returned " + response.status);
+  return response.json();
+}
+
+function showTip(event, html) {
+  tip.innerHTML = html;
+  tip.style.opacity = "1";
+  tip.style.left = Math.min(event.clientX + 12, innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = (event.clientY - tip.offsetHeight - 10) + "px";
+}
+const hideTip = () => { tip.style.opacity = "0"; };
+
+function el(name, attrs, parent) {
+  const node = document.createElementNS(SVG, name);
+  for (const key in attrs) node.setAttribute(key, attrs[key]);
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+function drawChart(rows) {
+  const svg = document.getElementById("chart");
+  svg.innerHTML = "";
+  if (!rows.length) {
+    svg.setAttribute("height", 40);
+    el("text", { x: 0, y: 20 }, svg).textContent = "No messages in this period.";
+    return;
+  }
+
+  const pad = { top: 12, right: 8, bottom: 30, left: 48 };
+  // Widen the gutter for the labels it will actually hold: six-figure counts
+  // were being clipped to "00,000".
+  pad.left = Math.max(48, 14 + num(Math.max(1, ...rows.map(
+    r => Math.max(+r.messages_in, +r.messages_out)))).length * 7);
+  // Wider slots when there are few buckets, so eight days do not sit in a
+  // third of the available width.
+  const slot = Math.max(26, Math.min(110, 900 / rows.length));
+  const width = pad.left + pad.right + slot * rows.length;
+  const height = 240;
+  const plotHeight = height - pad.top - pad.bottom;
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
+  svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+  svg.style.maxWidth = "100%";
+
+  const peak = Math.max(1, ...rows.map(r => Math.max(+r.messages_in, +r.messages_out)));
+  // Pick a gridline step a person would choose -- 1, 2 or 5 times a power of
+  // ten -- and never below 1, because these are whole messages: a scale topping
+  // out at 50 in four steps would otherwise label them 12.5 and 37.5.
+  const rough = peak / 4;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rough)));
+  const normalised = rough / magnitude;
+  const step = Math.max(
+    1, (normalised <= 1 ? 1 : normalised <= 2 ? 2 : normalised <= 5 ? 5 : 10) * magnitude
+  );
+  const top = step * 4;
+  const y = (value) => pad.top + plotHeight - (value / top) * plotHeight;
+
+  const grid = el("g", { class: "grid" }, svg);
+  for (let i = 0; i <= 4; i++) {
+    const value = (top / 4) * i;
+    el("line", { x1: pad.left, x2: width - pad.right, y1: y(value), y2: y(value) }, grid);
+    const label = el("text", { x: pad.left - 8, y: y(value) + 4, "text-anchor": "end" }, svg);
+    label.textContent = num(value);
+    label.setAttribute("aria-hidden", "true");
+  }
+
+  const barWidth = Math.max(5, (slot - 8) / 2);
+  rows.forEach((row, index) => {
+    const x0 = pad.left + slot * index + 4;
+    [
+      ["messages_in", "var(--series-in)", "Received", 0],
+      // 2px gap between adjacent fills so the pair reads as two marks.
+      ["messages_out", "var(--series-out)", "Sent", barWidth + 2],
+    ].forEach(([key, color, label, offset]) => {
+      const value = +row[key];
+      if (!value) return;
+      const barHeight = Math.max(2, pad.top + plotHeight - y(value));
+      const bar = el("rect", {
+        class: "bar", x: x0 + offset, y: y(value),
+        width: barWidth, height: barHeight, rx: 4, fill: color,
+      }, svg);
+      bar.addEventListener("mousemove", (event) =>
+        showTip(event, "<b>" + row.bucket + "</b><br>" + label + ": " + num(value)));
+      bar.addEventListener("mouseleave", hideTip);
+    });
+
+    if (rows.length <= 14 || index % Math.ceil(rows.length / 10) === 0) {
+      const tick = el("text", {
+        x: x0 + barWidth, y: height - pad.bottom + 16, "text-anchor": "middle",
+      }, svg);
+      tick.textContent = String(row.bucket).slice(5);
+    }
+  });
+
+  el("line", {
+    x1: pad.left, x2: width - pad.right,
+    y1: pad.top + plotHeight, y2: pad.top + plotHeight,
+    stroke: "currentColor", "stroke-opacity": ".35",
+  }, svg);
+}
+
+function emptyChart(svg, message) {
+  svg.innerHTML = "";
+  svg.setAttribute("height", 40);
+  svg.setAttribute("width", 400);
+  el("text", { x: 0, y: 20 }, svg).textContent = message;
+}
+
+function drawOutcomes(rows) {
+  const svg = document.getElementById("outcomes");
+  if (!rows.length) return emptyChart(svg, "No delivery attempts in this period.");
+  svg.innerHTML = "";
+
+  const pad = { top: 12, right: 8, bottom: 30, left: 48 };
+  pad.left = Math.max(48, 14 + num(Math.max(1, ...rows.map(
+    r => +r.successes + +r.deferrals + +r.failures))).length * 7);
+  const slot = Math.max(22, Math.min(100, 860 / rows.length));
+  const width = pad.left + pad.right + slot * rows.length;
+  const height = 200;
+  const plotHeight = height - pad.top - pad.bottom;
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
+  svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+  svg.style.maxWidth = "100%";
+
+  const totals = rows.map(r => +r.successes + +r.deferrals + +r.failures);
+  const peak = Math.max(1, ...totals);
+  const rough = peak / 4;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rough)));
+  const normalised = rough / magnitude;
+  const step = Math.max(
+    1, (normalised <= 1 ? 1 : normalised <= 2 ? 2 : normalised <= 5 ? 5 : 10) * magnitude
+  );
+  const top = step * 4;
+  const y = (value) => pad.top + plotHeight - (value / top) * plotHeight;
+
+  const grid = el("g", { class: "grid" }, svg);
+  for (let i = 0; i <= 4; i++) {
+    const value = step * i;
+    el("line", { x1: pad.left, x2: width - pad.right, y1: y(value), y2: y(value) }, grid);
+    el("text", { x: pad.left - 8, y: y(value) + 4, "text-anchor": "end" }, svg)
+      .textContent = num(value);
+  }
+
+  const barWidth = Math.max(8, slot - 10);
+  rows.forEach((row, index) => {
+    const x = pad.left + slot * index + 5;
+    let cursor = 0;
+    [
+      ["successes", "var(--good)", "Delivered"],
+      ["deferrals", "var(--warning)", "Deferred"],
+      ["failures", "var(--critical)", "Failed"],
+    ].forEach(([key, color, label]) => {
+      const value = +row[key];
+      if (!value) return;
+      const segmentTop = y(cursor + value);
+      // 2px of surface between segments so the stack reads as parts.
+      const segmentHeight = Math.max(2, y(cursor) - segmentTop - 2);
+      const rect = el("rect", {
+        class: "bar", x: x, y: segmentTop, width: barWidth,
+        height: segmentHeight, rx: 3, fill: color,
+      }, svg);
+      rect.addEventListener("mousemove", (event) => showTip(
+        event, "<b>" + row.bucket + "</b><br>" + label + ": " + num(value)));
+      rect.addEventListener("mouseleave", hideTip);
+      cursor += value;
+    });
+    if (rows.length <= 14 || index % Math.ceil(rows.length / 10) === 0) {
+      el("text", {
+        x: x + barWidth / 2, y: height - pad.bottom + 16, "text-anchor": "middle",
+      }, svg).textContent = String(row.bucket).slice(5);
+    }
+  });
+}
+
+function drawDomains(rows) {
+  const svg = document.getElementById("domains");
+  if (!rows.length) return emptyChart(svg, "No outbound mail in this period.");
+  svg.innerHTML = "";
+
+  const top = rows.slice(0, 10);
+  const rowHeight = 24;
+  const pad = { top: 6, right: 56, bottom: 6, left: 160 };
+  const width = 680;
+  const height = pad.top + pad.bottom + rowHeight * top.length;
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
+  svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+  svg.style.maxWidth = "100%";
+
+  const peak = Math.max(1, ...top.map(r => +r.attempts));
+  const plotWidth = width - pad.left - pad.right;
+
+  top.forEach((row, index) => {
+    const y = pad.top + rowHeight * index;
+    const barWidth = Math.max(2, (+row.attempts / peak) * plotWidth);
+    el("text", {
+      x: pad.left - 10, y: y + rowHeight / 2 + 4, "text-anchor": "end",
+    }, svg).textContent = shown(row.recipient_domain);
+    const bar = el("rect", {
+      class: "bar", x: pad.left, y: y + 4, width: barWidth,
+      height: rowHeight - 10, rx: 4, fill: "var(--series-in)",
+    }, svg);
+    bar.addEventListener("mousemove", (event) => showTip(event,
+      "<b>" + shown(row.recipient_domain) + "</b><br>" +
+      num(row.attempts) + " attempts<br>" +
+      num(row.successes) + " delivered, " + num(row.deferrals) + " deferred, " +
+      num(row.failures) + " failed"));
+    bar.addEventListener("mouseleave", hideTip);
+    // Direct label: the count is on the bar, so no axis is needed.
+    el("text", {
+      x: pad.left + barWidth + 8, y: y + rowHeight / 2 + 4,
+    }, svg).textContent = num(row.attempts);
+  });
+}
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function drawHeatmap(rows) {
+  const svg = document.getElementById("heatmap");
+  if (!rows.length) return emptyChart(svg, "No messages in this period.");
+  svg.innerHTML = "";
+
+  const counts = new Map();
+  let peak = 0;
+  for (const row of rows) {
+    counts.set(+row.weekday + ":" + +row.hour, +row.messages);
+    peak = Math.max(peak, +row.messages);
+  }
+
+  const cell = 24, gap = 2;
+  const pad = { top: 18, right: 8, bottom: 6, left: 40 };
+  const width = pad.left + pad.right + cell * 24;
+  const height = pad.top + pad.bottom + cell * 7;
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
+  svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+  svg.style.maxWidth = "100%";
+
+  for (let hour = 0; hour < 24; hour += 3) {
+    el("text", {
+      x: pad.left + cell * hour + cell / 2, y: 12, "text-anchor": "middle",
+    }, svg).textContent = hour;
+  }
+
+  for (let day = 0; day < 7; day++) {
+    el("text", {
+      x: pad.left - 8, y: pad.top + cell * day + cell / 2 + 4, "text-anchor": "end",
+    }, svg).textContent = DAYS[day];
+
+    for (let hour = 0; hour < 24; hour++) {
+      const value = counts.get(day + ":" + hour) || 0;
+      // Six steps of one hue; zero is the surface, so an empty hour reads as
+      // empty rather than as a pale value.
+      //
+      // Logarithmic, not linear or square-root. Mail traffic is skewed enough
+      // that one incident -- a burst of tens of thousands in a single hour --
+      // flattens every ordinary hour into the lightest step, leaving a grid of
+      // one colour. A log scale keeps the normal working week legible while
+      // still showing the outlier as the darkest.
+      const level = value === 0
+        ? 0
+        : Math.max(1, Math.min(6,
+            Math.ceil(Math.log(value + 1) / Math.log(peak + 1) * 6)));
+      const rect = el("rect", {
+        class: "cell",
+        x: pad.left + cell * hour, y: pad.top + cell * day,
+        width: cell - gap, height: cell - gap, rx: 3,
+        fill: "var(--heat-" + level + ")",
+      }, svg);
+      rect.addEventListener("mousemove", (event) => showTip(event,
+        "<b>" + DAYS[day] + " " + String(hour).padStart(2, "0") + ":00</b><br>" +
+        num(value) + (value === 1 ? " message" : " messages")));
+      rect.addEventListener("mouseleave", hideTip);
+    }
+  }
+}
+
+function drawSpam(rows) {
+  const svg = document.getElementById("spam");
+  if (!rows.length) return emptyChart(svg, "No scanned mail in this period.");
+  svg.innerHTML = "";
+
+  const top = rows.slice(0, 10);
+  const rowHeight = 26;
+  const pad = { top: 6, right: 70, bottom: 6, left: 200 };
+  const width = 700;
+  const height = pad.top + pad.bottom + rowHeight * top.length;
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
+  svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+  svg.style.maxWidth = "100%";
+
+  const peak = Math.max(1, ...top.map(r => +r.scanned));
+  const plotWidth = width - pad.left - pad.right;
+
+  top.forEach((row, index) => {
+    const y = pad.top + rowHeight * index;
+    el("text", {
+      x: pad.left - 10, y: y + rowHeight / 2 + 4, "text-anchor": "end",
+    }, svg).textContent = shown(row.address);
+
+    const spamWidth = (+row.spam / peak) * plotWidth;
+    const cleanWidth = (+row.clean / peak) * plotWidth;
+    [
+      [spamWidth, 0, "var(--critical)", "Spam", row.spam],
+      // 2px of surface between the two fills so they read as two parts.
+      [cleanWidth, spamWidth + 2, "var(--heat-2)", "Clean", row.clean],
+    ].forEach(([barWidth, offset, color, label, value]) => {
+      if (barWidth <= 0) return;
+      const bar = el("rect", {
+        class: "bar", x: pad.left + offset, y: y + 5,
+        width: Math.max(2, barWidth), height: rowHeight - 12, rx: 3, fill: color,
+      }, svg);
+      bar.addEventListener("mousemove", (event) => showTip(event,
+        "<b>" + shown(row.address) + "</b><br>" + label + ": " + num(value)));
+      bar.addEventListener("mouseleave", hideTip);
+    });
+
+    el("text", {
+      x: pad.left + spamWidth + cleanWidth + 10, y: y + rowHeight / 2 + 4,
+    }, svg).textContent = (row.spam_rate === null ? "\u2014" : row.spam_rate + "% spam");
+  });
+}
+
+function drawConcurrency(rows) {
+  const svg = document.getElementById("concurrency");
+  if (!rows.length) return emptyChart(svg, "No concurrency samples in this period.");
+  svg.innerHTML = "";
+
+  const pad = { top: 12, right: 8, bottom: 26, left: 44 };
+  const width = 700, height = 180;
+  const plotHeight = height - pad.top - pad.bottom;
+  const plotWidth = width - pad.left - pad.right;
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
+  svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+  svg.style.maxWidth = "100%";
+
+  const peak = Math.max(1, ...rows.map(r =>
+    Math.max(+r.local_max_used, +r.remote_max_used)));
+  const top = Math.max(4, Math.ceil(peak / 4) * 4);
+  const x = (index) => pad.left + (rows.length === 1 ? plotWidth / 2
+    : (index / (rows.length - 1)) * plotWidth);
+  const y = (value) => pad.top + plotHeight - (value / top) * plotHeight;
+
+  const grid = el("g", { class: "grid" }, svg);
+  for (let i = 0; i <= 4; i++) {
+    const value = (top / 4) * i;
+    el("line", { x1: pad.left, x2: width - pad.right, y1: y(value), y2: y(value) }, grid);
+    el("text", { x: pad.left - 8, y: y(value) + 4, "text-anchor": "end" }, svg)
+      .textContent = num(value);
+  }
+
+  [["local_max_used", "var(--series-in)", "Local"],
+   ["remote_max_used", "var(--series-out)", "Remote"]].forEach(([key, color]) => {
+    const points = rows.map((row, index) => x(index) + "," + y(+row[key])).join(" ");
+    el("polyline", {
+      points: points, fill: "none", stroke: color, "stroke-width": 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round",
+    }, svg);
+  });
+
+  // One hit target per sample, covering the full height, so the crosshair is
+  // reachable anywhere in the column rather than only on the line itself.
+  rows.forEach((row, index) => {
+    const band = el("rect", {
+      x: x(index) - plotWidth / Math.max(1, rows.length) / 2, y: pad.top,
+      width: Math.max(6, plotWidth / Math.max(1, rows.length)), height: plotHeight,
+      fill: "transparent", class: "cell",
+    }, svg);
+    band.addEventListener("mousemove", (event) => showTip(event,
+      "<b>" + String(row.minute).slice(5, 16) + "</b><br>" +
+      "Local: " + num(row.local_max_used) + " of " + num(row.local_limit) + "<br>" +
+      "Remote: " + num(row.remote_max_used) + " of " + num(row.remote_limit)));
+    band.addEventListener("mouseleave", hideTip);
+  });
+
+  el("text", { x: pad.left, y: height - 8 }, svg).textContent =
+    String(rows[0].minute).slice(5, 16);
+  const last = el("text", {
+    x: width - pad.right, y: height - 8, "text-anchor": "end",
+  }, svg);
+  last.textContent = String(rows[rows.length - 1].minute).slice(5, 16);
+}
+
+// A refusal often points at a page explaining it -- Microsoft's
+// aka.ms/EXOSmtpErrors, for one. The anchor is built as a node rather than
+// markup, so nothing in a remote server's reply can be read as HTML.
+const URL_IN_TEXT = /https?:\/\/[^\s<>"')\]]+/g;
+function withLinks(td, text) {
+  let at = 0;
+  for (const match of text.matchAll(URL_IN_TEXT)) {
+    if (match.index > at) {
+      td.appendChild(document.createTextNode(text.slice(at, match.index)));
+    }
+    const a = document.createElement("a");
+    a.href = match[0];
+    a.textContent = match[0];
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    td.appendChild(a);
+    at = match.index + match[0].length;
+  }
+  if (at < text.length) td.appendChild(document.createTextNode(text.slice(at)));
+}
+
+// What each table is showing, so a header click can re-sort it without
+// asking the server again.
+const tableState = {};
+
+function compareBy(key, kind, direction) {
+  return (a, b) => {
+    const x = a[key], y = b[key];
+    // Empty cells sort last whichever way the column is pointing, rather
+    // than bunching at the top and pushing the real rows out of view.
+    if (x == null || x === "") return y == null || y === "" ? 0 : 1;
+    if (y == null || y === "") return -1;
+    let result;
+    if (kind && kind !== "link") result = Number(x) - Number(y);
+    else result = String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: "base" });
+    return direction === "desc" ? -result : result;
+  };
+}
+
+function sortable(id) {
+  const table = document.querySelector("#" + id);
+  if (!table || table.dataset.sortable === "yes") return;
+  table.dataset.sortable = "yes";
+  const heads = table.querySelectorAll("thead th");
+  heads.forEach((th, index) => {
+    th.addEventListener("click", () => {
+      const state = tableState[id];
+      if (!state || !state.rows.length) return;
+      const [key, kind] = state.columns[index];
+      const direction =
+        state.sort && state.sort.index === index && state.sort.direction === "asc"
+          ? "desc" : "asc";
+      state.sort = { index, direction };
+      state.rows = state.rows.slice().sort(compareBy(key, kind, direction));
+      draw(id, state.rows, state.columns);
+      heads.forEach((other, i) => {
+        other.dataset.sorted = i === index ? direction : "";
+      });
+    });
+  });
+}
+
+function draw(id, rows, columns) {
+  const body = document.querySelector("#" + id + " tbody");
+  body.innerHTML = "";
+  if (!rows.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = columns.length;
+    td.className = "empty";
+    td.textContent = "Nothing in this period.";
+    tr.appendChild(td);
+    body.appendChild(tr);
+    return;
+  }
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    for (const [key, kind] of columns) {
+      const td = document.createElement("td");
+      if (kind === "bytes") td.textContent = bytes(row[key]);
+      else if (kind === "link") withLinks(td, row[key] == null ? "" : shown(String(row[key])));
+      else if (kind) td.textContent = num(row[key]);
+      else td.textContent = row[key] == null ? "" : shown(String(row[key]));
+      if (kind && kind !== "link") td.className = "num";
+      tr.appendChild(td);
+    }
+    body.appendChild(tr);
+  }
+}
+
+function fill(id, rows, columns) {
+  // A reload replaces the data, so any previous sort no longer describes it.
+  tableState[id] = { rows: rows, columns: columns, sort: null };
+  const table = document.querySelector("#" + id);
+  if (table) {
+    table.querySelectorAll("thead th").forEach((th) => { th.dataset.sorted = ""; });
+  }
+  sortable(id);
+  draw(id, rows, columns);
+}
+
+
+let failureRows = [];
+let failureFilter = null;
+
+const FAILURE_COLUMNS = [
+  ["result", false], ["remote_code", false], ["remote_status", false],
+  ["reason", false], ["who_from", false], ["who_to", false],
+  ["attempts", true], ["last_seen", false],
+];
+
+// "a@account.example, b@account.example" plus a count of the ones not listed, so a cause that hit
+// forty recipients does not print forty addresses.
+function who(sample, total) {
+  const listed = sample ? String(sample).split(", ").filter(Boolean) : [];
+  if (!listed.length) return "\u2014";
+  const remaining = Number(total || 0) - listed.length;
+  return listed.join(", ") + (remaining > 0 ? " +" + remaining + " more" : "");
+}
+
+function renderFailures() {
+  const chip = document.getElementById("failfilter");
+  const rows = (failureFilter
+    ? failureRows.filter(r => r.result === failureFilter)
+    : failureRows
+  ).map(r => Object.assign({}, r, {
+    who_from: who(r.sample_accounts, r.accounts),
+    who_to: who(r.sample_recipients, r.recipients),
+  }));
+  fill("failures", rows, FAILURE_COLUMNS);
+  if (failureFilter) {
+    chip.hidden = false;
+    chip.textContent = "showing " + failureFilter + "s only \u00d7";
+  } else {
+    chip.hidden = true;
+  }
+}
+
+function reveal(id, filter) {
+  if (filter !== undefined) {
+    failureFilter = filter;
+    renderFailures();
+  }
+  const heading = document.getElementById(id);
+  if (!heading) return;
+  heading.scrollIntoView({ behavior: "smooth", block: "start" });
+  // A brief highlight, so it is obvious which section answered the click.
+  heading.classList.remove("flash");
+  void heading.offsetWidth;
+  heading.classList.add("flash");
+}
+
+document.getElementById("failfilter").addEventListener("click", () => {
+  failureFilter = null;
+  renderFailures();
+});
+
+async function loadAlerts() {
+  try {
+    const raised = await fetch("api/alerts?since=2000-01-01&until=2100-01-01")
+      .then(r => r.json());
+    document.getElementById("alerts").innerHTML = raised.map(a =>
+      '<div class="alert ' + a.severity + '"><b>' + a.title + "</b>" +
+      a.detail + "</div>").join("");
+  } catch (error) {
+    // An alert panel that cannot load must not take the page down with it.
+  }
+}
+
+async function load() {
+  loadAlerts();
+  try {
+    try {
+      const config = await fetch("api/config").then(r => r.json());
+      if (config.display_timezone) {
+        document.getElementById("tzname").textContent = config.display_timezone;
+      }
+      document.getElementById("demobanner").hidden = !config.demo_data;
+    } catch (error) {
+      // A missing config endpoint is not a reason to render nothing.
+    }
+    const s = await get("api/summary");
+    // Each tile leads to the section that explains it; the two outcome tiles
+    // also narrow the failures table to that outcome.
+    const tiles = [
+      ["Received", num(s.messages_in), "sec-volume", undefined, "per day"],
+      ["Sent", num(s.messages_out), "sec-accounts", undefined, "by account"],
+      ["Delivery rate",
+       s.success_rate === null ? "—" : s.success_rate + "%",
+       "sec-ended", undefined, "how they ended"],
+      ["Deferrals", num(s.deferrals), "sec-why", "deferral", "why"],
+      ["Failures", num(s.failures), "sec-why", "failure", "why"],
+    ];
+    // Only worth a tile when it has happened: a burst means somebody is
+    // forging this server as a sender.
+    if (s.discarded_bounces > 0) {
+      // Say whether it was a trickle or a burst: most of them landing on one
+      // day is an incident, not routine backscatter.
+      const concentrated = s.discarded_bounce_peak / s.discarded_bounces > 0.5;
+      const hint = concentrated
+        ? num(s.discarded_bounce_peak) + " on " + s.discarded_bounce_peak_day
+        : "undeliverable notices";
+      tiles.push(["Bounces discarded", num(s.discarded_bounces),
+                  "sec-why", undefined, hint]);
+    }
+    const container = document.getElementById("tiles");
+    container.innerHTML = "";
+    for (const [label, value, target, filter, hint] of tiles) {
+      // A real button: keyboard-reachable and announced as actionable, which
+      // a clickable div is not.
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tile";
+      button.innerHTML = "<span>" + label + "</span><b>" + value +
+                         "</b><em>" + hint + " \u2192</em>";
+      button.setAttribute("aria-label", label + " " + value + ", show " + hint);
+      button.addEventListener("click", () => reveal(target, filter));
+      container.appendChild(button);
+    }
+
+    drawChart(await get("api/timeseries"));
+    drawOutcomes(await get("api/outcomes"));
+    drawHeatmap(await get("api/hourly"));
+    const recipients = await get("api/top-recipients");
+    drawDomains(recipients);
+    fill("senders", await get("api/top-senders"),
+         [["auth_user", false], ["messages", true], ["bytes", "bytes"]]);
+    fill("recipients", recipients,
+         [["recipient_domain", false], ["attempts", true], ["successes", true],
+          ["deferrals", true], ["failures", true]]);
+    const flow = await get("api/domain-flow");
+    fill("flow", flow.map(r => Object.assign({}, r, {
+      rate: r.attempts > 0
+        ? (Math.round(1000 * r.successes / r.attempts) / 10) + "%" : "\u2014",
+    })), [["sender_domain", false], ["recipient_domain", false], ["attempts", true],
+          ["successes", true], ["deferrals", true], ["failures", true], ["rate", false]]);
+
+    const retries = await get("api/retries");
+    document.getElementById("retrytiles").innerHTML = [
+      ["First attempt", num(retries.delivered_first_attempt), "delivered"],
+      ["After retrying", num(retries.delivered_after_retry), "delivered"],
+      ["Still trying", num(retries.still_trying), "not yet resolved"],
+      ["Bounced", num(retries.bounced), "permanent"],
+      ["Retry delay",
+       retries.median_minutes_to_delivery === null
+         ? "\u2014" : retries.median_minutes_to_delivery + " min",
+       "average when retried"],
+    ].map(([label, value, hint]) =>
+      '<div class="tile"><span>' + label + "</span><b>" + value +
+      "</b><em>" + hint + "</em></div>").join("");
+
+    fill("stuck", await get("api/stuck"),
+         [["recipient", false], ["attempts", true], ["hours_waiting", true],
+          ["reason", false], ["last_try", false]]);
+
+    failureRows = await get("api/failures");
+    renderFailures();
+
+    fill("faildetail", (await get("api/failure-detail")).map(r =>
+      Object.assign({}, r, { ts: String(r.ts).slice(0, 16) })),
+      [["ts", false], ["result", false], ["sender", false], ["recipient", false],
+       ["remote_code", false], ["remote_status", false], ["remote_ip", false],
+       ["side", false], ["said", "link"]]);
+
+    const spam = await get("api/spam");
+    drawSpam(spam);
+    fill("spamtable", spam.map(r => Object.assign({}, r, {
+      share: r.spam_rate === null ? "\u2014" : r.spam_rate + "%",
+    })), [["address", false], ["spam", true], ["clean", true],
+          ["share", false], ["worst_score", false]]);
+
+    fill("connections", await get("api/connections"),
+         [["service", false], ["connects", true], ["messages", true],
+          ["sessions_without_mail", true], ["peak_concurrency", true],
+          ["limit_value", true]]);
+    drawConcurrency(await get("api/concurrency"));
+
+    fill("blocked", await get("api/blocked"),
+       [["ip", false], ["times", true], ["jails", false],
+        ["first_seen", false], ["last_seen", false]]);
+  fill("access", await get("api/mailbox-access"),
+         [["address", false], ["service", false], ["logins", true],
+          ["addresses", true], ["last_seen", false]]);
+    fill("authfail", await get("api/auth-failures"),
+         [["client_ip", false], ["failures", true], ["accounts_tried", true],
+          ["last_seen", false], ["blocked", false]]);
+
+    fill("mailboxes", await get("api/mailboxes"),
+         [["address", false], ["sent", true], ["received", true]]);
+
+    document.getElementById("updated").textContent =
+      "\u00b7 updated " + new Date().toLocaleTimeString();
+  } catch (error) {
+    document.getElementById("tiles").innerHTML =
+      '<div class="tile"><span>Could not load</span><b>—</b></div>';
+    console.error(error);
+  }
+}
+
+const today = new Date();
+const iso = (d) => d.toISOString().slice(0, 10);
+
+// A view is addressable: ?since=&until=&hide=1 so a range can be bookmarked,
+// sent to somebody, or reproduced exactly in a screenshot.
+const params = new URLSearchParams(location.search);
+document.getElementById("until").value =
+  params.get("until") || iso(today);
+document.getElementById("since").value =
+  params.get("since") || iso(new Date(today.getTime() - 7 * 86400000));
+if (params.get("hide")) document.getElementById("redact").checked = true;
+if (params.get("live") === "0") document.getElementById("autorefresh").checked = false;
+document.getElementById("reload").addEventListener("click", load);
+document.getElementById("redact").addEventListener("change", load);
+
+function isToday() {
+  const today = new Date().toISOString().slice(0, 10);
+  return document.getElementById("until").value >= today;
+}
+
+setInterval(() => {
+  // Only refresh a view that includes today: an older range cannot change,
+  // and a reader comparing rows should not have them move underneath.
+  if (document.getElementById("autorefresh").checked && isToday()) load();
+}, REFRESH_SECONDS * 1000);
+
+load();
+</script>

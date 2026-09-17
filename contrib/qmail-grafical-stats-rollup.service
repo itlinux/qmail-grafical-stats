@@ -1,0 +1,13 @@
+[Unit]
+Description=Fold old qmail-grafical-stats rows into daily totals
+After=mysqld.service
+
+[Service]
+Type=oneshot
+User=qmaill
+WorkingDirectory=/opt/qmail-grafical-stats
+Environment=PYTHONPATH=/opt/qmail-grafical-stats
+ExecStart=/usr/bin/python3 -m qmailstats.rollup --config /etc/qmail-grafical-stats/config.ini --retain-days 90 --prune
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full

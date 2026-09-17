@@ -1,0 +1,7 @@
+@400000006aa42ea30450a31c policy_check: local info@example.com -> remote booking@partner.example (AUTHENTICATED SENDER)
+@400000006aa42ea40b9ed88c mail recv: pid 358645 from <info@example.com> qp 358661
+@400000006aa42f1630556bb4 policy_check: local pc@example.net -> local pc@example.net (AUTHENTICATED SENDER)
+@400000006aa42f170c0fab5c mail recv: pid 358878 from <pc@example.net> qp 358880
+@400000006aa8dd3f1b62b054 tcpserver: pid 209937 from 203.0.113.26
+@400000006aa8dd3f1b64ee8c tcpserver: ok 209937 mail.example.com:192.0.2.10:587 :203.0.113.26::59874
+@400000006aa8dd3f1b7a0000 tcpserver: end 209937 status 0
