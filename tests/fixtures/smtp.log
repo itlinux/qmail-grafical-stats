@@ -1,0 +1,10 @@
+@400000006aa8e01718c73554 tcpserver: pid 210485 from 198.51.100.4
+@400000006aa8e01718c83b0c tcpserver: ok 210485 mail.example.com:192.0.2.10:25 :198.51.100.4::56124
+@400000006aa8e0172997d5b4 tcpserver: end 210485 status 0
+@400000006aa8e0172997d99c tcpserver: status: 1/200
+@400000006aa8e0173706c8cc simscan:[210394]: skipping check_spam, disabled for this domain
+@400000006aa8e01a2ad1633c simscan:[210394]:CLEAN (-1.21/9999.00):3.3608s:=?UTF-8?Q?=F0=9F=98=8D_SUNNYDEALS_|_-20%_di_EXTRA_Sconto!?=:198.51.100.224:sm.26791275955.kbntqtrpftk8qpyz02-noreply=newsletter.example@bulk.example:export@example.org
+@400000006aa8e01a2ad16b0c simscan:[210394]: skipping check_dspam, disabled for this domain
+@400000006aa8e01a2bdc4f44 mail recv: pid 210394 from <sm.26791275955.kbntqtrpftk8qpyz02-noreply=newsletter.example@bulk.example> qp 210429
+@400000006aa8e01a2bf53644 tcpserver: end 210393 status 0
+@400000006aa8e01a2bf53644 tcpserver: status: 0/200

@@ -1,0 +1,18 @@
+[Unit]
+Description=Read qmail and Dovecot logs into qmail-grafical-stats
+After=mysqld.service
+
+[Service]
+# /var/lock is root-owned tmpfs: a service user cannot create a lock
+# there, and anything left behind gets cleaned up. Let systemd own a
+# directory for us instead.
+RuntimeDirectory=qmail-grafical-stats
+RuntimeDirectoryPreserve=yes
+Type=oneshot
+User=qmaill
+WorkingDirectory=/opt/qmail-grafical-stats
+Environment=PYTHONPATH=/opt/qmail-grafical-stats
+ExecStart=/usr/bin/python3 -m qmailstats.ingest --config /etc/qmail-grafical-stats/config.ini
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full

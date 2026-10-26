@@ -1,0 +1,93 @@
+[database]
+; The parser's own account. It must have no rights over the vpopmail schema.
+dsn = mysql://qmailstats:CHANGE_ME@127.0.0.1:3306/qmailstats
+
+[parser]
+logroot = /var/log/qmail
+lockfile = /run/qmail-grafical-stats/ingest.lock
+; Subjects are not stored by default. Turning this on collects subject lines
+; from that point forward; earlier ones can be recovered by clearing the
+; checkpoints and re-reading the rotations still on disk.
+store_subject = false
+
+; Log directories as 'directory:role'. Roles are smtp, submission, smtps and
+; send; only the directory names vary between installs. The queue log is always
+; read last whatever order is given here. Leave unset for directories named
+; after their roles.
+; logdirs = qmail-send:send, qmail-smtpd:smtp, submission:submission
+
+; Per-account attribution normally comes from the policy_check lines written
+; by a patched qmail-smtpd. Where those are absent, turn this on to credit
+; outbound mail to its envelope sender instead. It is never applied to port 25,
+; where the envelope sender is an unverified claim -- crediting it there would
+; let anyone write themselves into another account's statistics. Every row
+; records which source was used, in message.auth_source.
+fallback_auth = false
+
+[server]
+listen_host = 127.0.0.1
+listen_port = 8765
+
+[dovecot]
+; Mailbox access statistics, read from Dovecot's syslog file. Leave logfile
+; empty to skip this source entirely. Rotations beside it (including gzipped
+; ones) are picked up automatically.
+logfile = /var/log/dovecot.log
+; Syslog records local time and omits the year; timestamps are converted to
+; UTC on the way in so they line up with the qmail rows. Set this to the
+; server's own zone -- an offset would be an hour wrong for half the year.
+timezone = UTC
+
+[display]
+; The timezone the dashboard renders in. Storage is always UTC; changing this
+; changes only what the page shows, so it is safe to change at any time.
+;
+; This is the readers' zone, not the server's. A box keeping one timezone while
+; carrying mail for people in another should render the readers' zone, or the
+; hourly figures will not line up with anybody's working day.
+timezone = UTC
+
+[domains]
+; vpopmail alias domains, as 'alias:real'. An alias delivers into the real
+; domain's mailboxes, so without this one customer with three domain names
+; appears as three domains, each holding a fraction of their traffic. Folding
+; happens when the page is drawn: the rows keep the domain the mail actually
+; used, so removing an entry here restores the split view with no re-ingest.
+; aliases = school-alias.example:school.example,
+;           training-alias.example:training.example,
+;           training.example:training.example,
+;           example-alias.example:example.org,
+;           owner-alias.example:owner.example
+
+[alerts]
+; Where to mail alerts. Leave empty to show them in the dashboard only.
+; A message goes out when the set of active alerts changes, including when it
+; empties -- not on every run, because an alert that arrives every minute is an
+; alert people filter.
+mail_to =
+
+; Who the alert is sent from. Defaults to postmaster@ this server's hostname.
+; Never set this to an address at the recipient's domain unless this server is
+; authorised to send for it: the mail would fail SPF at the destination, and
+; an alert about a broken mail server is the one you cannot afford to lose.
+; mail_from =
+
+; Where the daily summary goes, if anywhere. Defaults to mail_to. The summary
+; is sent once a morning and answers four questions: how much mail moved, what
+; did not arrive and why, who is being guessed at, and what is still stuck.
+; digest_to =
+
+; Thresholds. The defaults are deliberately dull: an alert that fires on
+; ordinary variation teaches people the dashboard cries wolf.
+; discarded_bounces_per_hour = 200
+; failure_rate_percent = 25
+; failure_rate_minimum_attempts = 20
+; stale_minutes = 60
+; auth_failures_per_hour = 150
+; concurrency_percent = 90
+
+[fail2ban]
+# Ban and unban actions are read from here into the "blocked" view. Leave it
+# empty to skip. The file is 0600 root by default, so the service user needs
+# read access -- see DEPLOY.md.
+logfile = /var/log/fail2ban.log

@@ -1,0 +1,5 @@
+@400000006aa8e01a2c3cab3c starting delivery 759: msg 68566592 to local example.org-export@example.org
+@400000006aa8e01a2c3caf24 status: local 1/10 remote 0/60
+@400000006aa8e01a2cf3d5dc delivery 759: success: did_0+0+1/
+@400000006aa8e01a2cf46a4c status: local 0/10 remote 0/60
+@400000006aa8e01a2cf4f304 end msg 68566592

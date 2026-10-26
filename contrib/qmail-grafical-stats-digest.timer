@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily mail summary
+
+[Timer]
+# Early enough to be waiting when the day starts, late enough that the night's
+# mail is all in.
+OnCalendar=*-*-* 06:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

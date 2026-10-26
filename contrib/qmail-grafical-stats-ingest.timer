@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep qmail-grafical-stats current
+
+[Timer]
+# Half a minute, so the dashboard is never far behind the logs. A run that
+# overruns cannot overlap the next: the parser takes a lock and exits.
+OnBootSec=1min
+OnUnitActiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

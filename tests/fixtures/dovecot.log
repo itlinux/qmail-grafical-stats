@@ -1,0 +1,13 @@
+Sep 13 00:03:15 imap-login: Info: Login: user=<info@example.com>, method=PLAIN, rip=203.0.113.207, lip=192.0.2.10, mpid=70157, TLS, session=<fzDAEldbr82XVI7P>
+Sep 13 00:07:08 imap-login: Info: Login: user=<info@example.com>, method=PLAIN, rip=203.0.113.207, lip=192.0.2.10, mpid=70339, TLS, session=<TXukIFdbdvKXVI7P>
+Sep 13 00:08:32 imap-login: Info: Login: user=<info@example.com>, method=PLAIN, rip=203.0.113.207, lip=192.0.2.10, mpid=70377, TLS, session=<a5iqJVdbsdqXVI7P>
+Sep 13 00:12:45 pop3-login: Info: Disconnected: Connection closed (no auth attempts in 20 secs): user=<>, rip=203.0.113.149, lip=192.0.2.10, session=<7xW7NFdb8IIodxuV>
+Sep 13 00:12:45 pop3-login: Info: Disconnected: Connection closed (no auth attempts in 0 secs): user=<>, rip=203.0.113.149, lip=192.0.2.10, session=<Y568NFdbvokodxuV>
+Sep 13 00:18:32 imap-login: Info: Disconnected: Connection closed (no auth attempts in 0 secs): user=<>, rip=203.0.113.102, lip=192.0.2.10, TLS, session=<ksF0SVdbXOPG6xhm>
+Sep 13 00:32:28 imap-login: Info: Disconnected: Connection closed (no auth attempts in 0 secs): user=<>, rip=203.0.113.232, lip=192.0.2.10, session=<FnE8e1dbZtKnY5Lo>
+Sep 13 00:32:28 imap-login: Info: Disconnected: Too many invalid commands (no auth attempts in 0 secs): user=<>, rip=203.0.113.214, lip=192.0.2.10, session=<p+dGe1dbGrOl9eTW>
+Sep 13 00:32:43 imap-login: Info: Disconnected: Connection closed (no auth attempts in 2 secs): user=<>, rip=203.0.113.191, lip=192.0.2.10, session=<pE4lfFdbKOisaRK/>
+Sep 13 00:32:44 imap-login: Info: Disconnected: Connection closed (no auth attempts in 1 secs): user=<>, rip=203.0.113.191, lip=192.0.2.10, session=<0yU+fFdbMOisaRK/>
+Sep 13 01:15:02 imap-login: Info: Disconnected: Aborted login (auth failed, 1 attempts in 4 secs): user=<admin@example.com>, method=PLAIN, rip=203.0.113.26, lip=192.0.2.10, TLS, session=<zzz1>
+Sep 13 01:15:09 imap-login: Info: Disconnected: Aborted login (auth failed, 1 attempts in 3 secs): user=<test@example.com>, method=PLAIN, rip=203.0.113.26, lip=192.0.2.10, TLS, session=<zzz2>
+Sep 13 08:41:10 imap(info@example.com): Info: Logged out in=412 out=90210
